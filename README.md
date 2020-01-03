@@ -61,7 +61,7 @@ torch_scatter [pip install --verbose --no-cache-dir torch-scatter]
 
 | 文件              | 说明                             |
 | ----------------- | -------------------------------- |
-| self_attn_pool.py | 自注意力记住的池化层和模型的定义 |
+| self_attn_pool.py | 自注意力机制的池化层和模型的定义 |
 
 ##### 运行示例
 
