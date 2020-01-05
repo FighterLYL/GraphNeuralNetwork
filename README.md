@@ -8,7 +8,7 @@ jupyter
 scipy
 numpy
 matplotlib
-torch>=1.1.0
+torch>=1.2.0
 ```
 
 ### Getting Start
