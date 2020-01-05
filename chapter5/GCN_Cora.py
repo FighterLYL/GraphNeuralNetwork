@@ -279,7 +279,7 @@ tensor_val_mask = torch.from_numpy(dataset.val_mask).to(device)
 tensor_test_mask = torch.from_numpy(dataset.test_mask).to(device)
 normalize_adjacency = CoraData.normalization(dataset.adjacency)   # 规范化邻接矩阵
 indices = torch.from_numpy(np.asarray([normalize_adjacency.row, 
-                                       normalize_adjacency.col])).long()
+                                       normalize_adjacency.col]).astype('int64')).long()
 values = torch.from_numpy(normalize_adjacency.data.astype(np.float32))
 tensor_adjacency = torch.sparse.FloatTensor(indices, values, 
                                             (2708, 2708)).to(device)
