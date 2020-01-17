@@ -12,11 +12,18 @@ from sklearn.model_selection import train_test_split
 import pickle
 import pandas as pd
 import torch_scatter
+import torch.optim as optim
 
 
 def normalization(adjacency):
-    """计算 L=D^-0.5 * (A+I) * D^-0.5, 
-    输入为scipy.sparse, 输出为torch.sparse.FloatTensor"""
+    """计算 L=D^-0.5 * (A+I) * D^-0.5,
+
+    Args:
+        adjacency: sp.csr_matrix.
+
+    Returns:
+        归一化后的邻接矩阵，类型为 torch.sparse.FloatTensor
+    """
     adjacency += sp.eye(adjacency.shape[0])    # 增加自连接
     degree = np.array(adjacency.sum(1))
     d_hat = sp.diags(np.power(degree, -0.5).flatten())
@@ -31,13 +38,12 @@ def normalization(adjacency):
 def filter_adjacency(adjacency, mask):
     """根据掩码mask对图结构进行更新
     
-    Arguments:
-    ----------
-        adjacency {torch.sparse.FloatTensor} -- 池化之前的邻接矩阵
-        mask {torch.Tensor(dtype=torch.bool)} -- 节点掩码向量
+    Args:
+        adjacency: torch.sparse.FloatTensor, 池化之前的邻接矩阵
+        mask: torch.Tensor(dtype=torch.bool), 节点掩码向量
     
     Returns:
-        torch.sparse.FloatTensor -- 池化之后归一化邻接矩阵
+        torch.sparse.FloatTensor, 池化之后归一化邻接矩阵
     """
     device = adjacency.device
     mask = mask.cpu().numpy()
@@ -66,7 +72,7 @@ def global_avg_pool(x, graph_indicator):
 class DDDataset(object):
     url = "https://ls11-www.cs.tu-dortmund.de/people/morris/graphkerneldatasets/DD.zip"
     
-    def __init__(self, data_root="data", rebuild=False):
+    def __init__(self, data_root="data", train_size=0.8):
         self.data_root = data_root
         self.maybe_download()
         sparse_adjacency, node_labels, graph_indicator, graph_labels = self.read_data()
@@ -74,6 +80,16 @@ class DDDataset(object):
         self.node_labels = node_labels
         self.graph_indicator = graph_indicator
         self.graph_labels = graph_labels
+        self.train_index, self.test_index = self.split_data(train_size)
+        self.train_label = graph_labels[self.train_index]
+        self.test_label = graph_labels[self.test_index]
+
+    def split_data(self, train_size):
+        unique_indicator = np.asarray(set(self.graph_indicator))
+        train_index, test_index = train_test_split(unique_indicator,
+                                                   train_size=train_size,
+                                                   random_state=1234)
+        return train_index, test_index
     
     def __getitem__(self, index):
         mask = self.graph_indicator == index
@@ -172,8 +188,8 @@ class GraphConvolution(nn.Module):
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
-            + str(self.in_features) + ' -> ' \
-            + str(self.out_features) + ')'
+            + str(self.input_dim) + ' -> ' \
+            + str(self.output_dim) + ')'
 
 
 class SelfAttentionPooling(nn.Module):
@@ -228,14 +244,11 @@ class ModelA(nn.Module):
     def __init__(self, input_dim, hidden_dim, num_classes=2):
         """图分类模型结构A
         
-        Arguments:
-        ----------
-            input_dim {int} -- 输入特征的维度
-            hidden_dim {int} -- 隐藏层单元数
-        
-        Keyword Arguments:
-        ----------
-            num_classes {int} -- 分类类别数 (default: {2})
+        Args:
+        ----
+            input_dim: int, 输入特征的维度
+            hidden_dim: int, 隐藏层单元数
+            num_classes: 分类类别数 (default: 2)
         """
         super(ModelA, self).__init__()
         self.input_dim = input_dim
