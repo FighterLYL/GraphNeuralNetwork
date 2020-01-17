@@ -13,7 +13,7 @@ torch>=1.2.0
 
 ### Getting Start
 
-* [Chapter5](./chapter5)
-* [Chapter7](./chapter7)
-* [Chapter8](./chapter8)
-* [Chapter9](./chapter9)
+* [x] [Chapter5](./chapter5)
+* [x] [Chapter7](./chapter7)
+* [x] [Chapter8](./chapter8)
+* [ ] [Chapter9](./chapter9)
