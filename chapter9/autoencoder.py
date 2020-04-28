@@ -7,11 +7,12 @@ import torch.nn.init as init
 
 
 class StackGCNEncoder(nn.Module):
-    def __init__(self, input_dim, output_dim, num_support, 
+    def __init__(self, input_dim, output_dim, num_support,
                  use_bias=False, activation=F.relu):
         """对得到的每类评分使用级联的方式进行聚合
         
         Args:
+        ----
             input_dim (int): 输入的特征维度
             output_dim (int): 输出的特征维度，需要output_dim % num_support = 0
             num_support (int): 评分的类别数，比如1~5分，值为5
@@ -25,16 +26,18 @@ class StackGCNEncoder(nn.Module):
         self.use_bias = use_bias
         self.activation = activation
         assert output_dim % num_support == 0
-        self.weight = nn.Parameter(torch.Tensor(input_dim, output_dim))
+        self.weight = nn.Parameter(torch.Tensor(num_support, 
+            input_dim, output_dim // num_support))
         if self.use_bias:
             self.bias = nn.Parameter(torch.Tensor(output_dim, ))
+            self.bias_item = nn.Parameter(torch.Tensor(output_dim, ))
         self.reset_parameters()
-        self.weight = self.weight.view(input_dim, output_dim // 5, 5)
 
     def reset_parameters(self):
         init.kaiming_uniform_(self.weight)
         if self.use_bias:
             init.zeros_(self.bias)
+            init.zeros_(self.bias_item)
 
     def forward(self, user_supports, item_supports, user_inputs, item_inputs):
         """StackGCNEncoder计算逻辑
@@ -55,28 +58,28 @@ class StackGCNEncoder(nn.Module):
         user_hidden = []
         item_hidden = []
         for i in range(self.num_support):
-            tmp_u = torch.matmul(self.weight[..., i], user_inputs)
-            tmp_v = torch.matmul(self.weight[..., i], item_inputs)
+            tmp_u = torch.matmul(user_inputs, self.weight[i])
+            tmp_v = torch.matmul(item_inputs, self.weight[i])
             tmp_user_hidden = torch.sparse.mm(user_supports[i], tmp_v)
             tmp_item_hidden = torch.sparse.mm(item_supports[i], tmp_u)
             user_hidden.append(tmp_user_hidden)
             item_hidden.append(tmp_item_hidden)
-        
+
         user_hidden = torch.cat(user_hidden, dim=1)
         item_hidden = torch.cat(item_hidden, dim=1)
-        
+
         user_outputs = self.activation(user_hidden)
         item_outputs = self.activation(item_hidden)
-        
+
         if self.use_bias:
             user_outputs += self.bias
             item_outputs += self.bias_item
-        
+
         return user_outputs, item_outputs
-    
+
 
 class SumGCNEncoder(nn.Module):
-    def __init__(self, input_dim, output_dim, num_support, 
+    def __init__(self, input_dim, output_dim, num_support,
                  use_bias=False, activation=F.relu):
         """对得到的每类评分使用求和的方式进行聚合
         
@@ -93,7 +96,8 @@ class SumGCNEncoder(nn.Module):
         self.num_support = num_support
         self.use_bias = use_bias
         self.activation = activation
-        self.weight = nn.Parameter(torch.Tensor(input_dim, output_dim * num_support))
+        self.weight = nn.Parameter(torch.Tensor(
+            input_dim, output_dim * num_support))
         if self.use_bias:
             self.bias = nn.Parameter(torch.Tensor(output_dim, ))
         self.reset_parameters()
@@ -122,31 +126,34 @@ class SumGCNEncoder(nn.Module):
         assert len(user_supports) == len(item_supports) == self.num_support
         user_hidden = 0
         item_hidden = 0
+        w = 0
         for i in range(self.num_support):
-            tmp_u = torch.matmul(self.weight[..., i], user_inputs)
-            tmp_v = torch.matmul(self.weight[..., i], item_inputs)
+            w += self.weight[..., i]
+            tmp_u = torch.matmul(user_inputs, w)
+            tmp_v = torch.matmul(item_inputs, w)
             tmp_user_hidden = torch.sparse.mm(user_supports[i], tmp_v)
             tmp_item_hidden = torch.sparse.mm(item_supports[i], tmp_u)
             user_hidden += tmp_user_hidden
             item_hidden += tmp_item_hidden
-        
+
         user_outputs = self.activation(user_hidden)
         item_outputs = self.activation(item_hidden)
-        
+
         if self.use_bias:
             user_outputs += self.bias
             item_outputs += self.bias_item
-        
+
         return user_outputs, item_outputs
 
 
 class FullyConnected(nn.Module):
-    def __init__(self, input_dim, output_dim,
+    def __init__(self, input_dim, output_dim, dropout=0.,
                  use_bias=False, activation=F.relu,
                  share_weights=False):
         """非线性变换层
         
         Args:
+        ----
             input_dim (int): 输入的特征维度
             output_dim (int): 输出的特征维度，需要output_dim % num_support = 0
             use_bias (bool, optional): 是否使用偏置. Defaults to False.
@@ -165,6 +172,7 @@ class FullyConnected(nn.Module):
             self.linear_item = self.linear_user
         else:
             self.linear_item = nn.Linear(input_dim, output_dim, bias=use_bias)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, user_inputs, item_inputs):
         """前向传播
@@ -177,7 +185,10 @@ class FullyConnected(nn.Module):
             [torch.Tensor]: 输出的用户特征
             [torch.Tensor]: 输出的商品特征
         """
+        user_inputs = self.dropout(user_inputs)
         user_outputs = self.linear_user(user_inputs)
+        
+        item_inputs = self.dropout(item_inputs)
         item_outputs = self.linear_item(item_inputs)
 
         if self.activation:
@@ -188,26 +199,31 @@ class FullyConnected(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, input_dim, num_classes):
+    def __init__(self, input_dim, num_weights, num_classes, dropout=0., activation=F.relu):
         """解码器
         
         Args:
+        ----
             input_dim (int): 输入的特征维度
+            num_weights (int): basis weight number
             num_classes (int): 总共的评分级别数，eg. 5
         """
         super(Decoder, self).__init__()
         self.input_dim = input_dim
+        self.num_weights = num_weights
         self.num_classes = num_classes
-        weights = []
-        for i in range(self.num_classes):
-            weight = nn.Parameter(torch.Tensor(input_dim, input_dim))
-            weights.append(weight)
+        self.activation = activation
+        
+        self.weight = nn.Parameter(torch.Tensor(num_weights, input_dim, input_dim))
+        self.weight_classifier = nn.Parameter(torch.Tensor(num_weights, num_classes))
         self.reset_parameters()
         
+        self.dropout = nn.Dropout(dropout)
+
     def reset_parameters(self):
-        for weight in self.weights:
-            init.kaiming_uniform_(weight)
-    
+        init.kaiming_uniform_(self.weight)
+        init.kaiming_uniform_(self.weight_classifier)
+
     def forward(self, user_inputs, item_inputs, user_indices, item_indices):
         """计算非归一化的分类输出
         
@@ -222,13 +238,20 @@ class Decoder(nn.Module):
         Returns:
             [torch.Tensor]: 未归一化的分类输出，shape=(num_edges, num_classes)
         """
+        user_inputs = self.dropout(user_inputs)
+        item_inputs = self.dropout(item_inputs)
         user_inputs = user_inputs[user_indices]
         item_inputs = item_inputs[item_indices]
-        outputs = []
-        for weight in self.weights:
-            tmp = torch.matmul(user_inputs, weight)
-            out = tmp * item_inputs
-            outputs.append(out)
         
-        outputs = torch.cat(outputs, dim=1)
+        basis_outputs = []
+        for i in range(self.num_weights):
+            tmp = torch.matmul(user_inputs, self.weight[i])
+            out = torch.sum(tmp * item_inputs, dim=1, keepdim=True)
+            basis_outputs.append(out)
+
+        basis_outputs = torch.cat(basis_outputs, dim=1)
+        
+        outputs = torch.matmul(basis_outputs, self.weight_classifier)
+        outputs = self.activation(outputs)
+        
         return outputs

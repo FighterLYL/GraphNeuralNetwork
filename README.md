@@ -13,7 +13,7 @@ torch>=1.2.0
 
 ### Getting Start
 
-* [x] [Chapter5](./chapter5)
-* [x] [Chapter7](./chapter7)
-* [x] [Chapter8](./chapter8)
-* [ ] [Chapter9](./chapter9)
+* [x] [Chapter5: 基于GCN的节点分类](./chapter5)
+* [x] [Chapter7: GraphSage示例](./chapter7)
+* [x] [Chapter8: 图分类示例](./chapter8)
+* [x] [Chapter9: 图自编码器](./chapter9)
