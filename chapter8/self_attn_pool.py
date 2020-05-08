@@ -85,7 +85,7 @@ class DDDataset(object):
         self.test_label = graph_labels[self.test_index]
 
     def split_data(self, train_size):
-        unique_indicator = np.asarray(set(self.graph_indicator))
+        unique_indicator = np.asarray(list(set(self.graph_indicator)))
         train_index, test_index = train_test_split(unique_indicator,
                                                    train_size=train_size,
                                                    random_state=1234)
