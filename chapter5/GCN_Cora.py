@@ -36,7 +36,7 @@ Data = namedtuple('Data', ['x', 'y', 'adjacency',
 
 
 class CoraData(object):
-    download_url = "https://raw.githubusercontent.com/kimiyoung/planetoid/master/data"
+    download_url = "https://github.com/kimiyoung/planetoid/raw/master/data"
     filenames = ["ind.cora.{}".format(name) for name in
                  ['x', 'tx', 'allx', 'y', 'ty', 'ally', 'graph', 'test.index']]
 
