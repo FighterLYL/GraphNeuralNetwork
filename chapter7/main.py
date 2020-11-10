@@ -29,7 +29,7 @@ data = CoraData().data
 x = data.x / data.x.sum(1, keepdims=True)  # 归一化数据，使得每一行和为1
 
 train_index = np.where(data.train_mask)[0]
-train_label = data.y[train_index]
+train_label = data.y
 test_index = np.where(data.test_mask)[0]
 model = GraphSage(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM,
                   num_neighbors_list=NUM_NEIGHBORS_LIST).to(DEVICE)
