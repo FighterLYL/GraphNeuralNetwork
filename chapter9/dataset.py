@@ -100,9 +100,16 @@ def convert_to_homogeneous(user_feature: np.ndarray, movie_feature: np.ndarray):
     user_feature = np.concatenate(
         [user_feature, np.zeros((num_user, movie_feature_dim))], axis=1)
     movie_feature = np.concatenate(
-        [movie_feature, np.zeros((num_movie, user_feature_dim))], axis=1)
+        [np.zeros((num_movie, user_feature_dim)), movie_feature], axis=1)
 
     return user_feature, movie_feature
+
+
+def normalize_feature(feature):
+    row_sum = feature.sum(1)
+    row_sum[row_sum == 0] = np.inf
+    normalized_feat = feature / row_sum.reshape(-1, 1)
+    return normalized_feat
 
 
 class MovielensDataset(object):
@@ -137,6 +144,8 @@ class MovielensDataset(object):
         # node property feature
         user_side_feature = get_user_side_feature(node_user)
         movie_side_feature = get_movie_side_feature(node_movie)
+        user_side_feature = normalize_feature(user_side_feature)
+        movie_side_feature = normalize_feature(movie_side_feature)
         user_side_feature, movie_side_feature = convert_to_homogeneous(user_side_feature,
                                                                        movie_side_feature)
 
