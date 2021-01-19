@@ -1,3 +1,4 @@
+#coding: utf-8
 """
 基于Cora的GraphSage示例
 """

@@ -13,11 +13,10 @@ Data = namedtuple('Data', ['x', 'y', 'adjacency_dict',
 
 
 class CoraData(object):
-    download_url = "https://github.com/kimiyoung/planetoid/raw/master/data"
     filenames = ["ind.cora.{}".format(name) for name in
                  ['x', 'tx', 'allx', 'y', 'ty', 'ally', 'graph', 'test.index']]
 
-    def __init__(self, data_root="cora", rebuild=False):
+    def __init__(self, data_root="../data/cora", rebuild=False):
         """Cora数据，包括数据下载，处理，加载等功能
         当数据的缓存文件存在时，将使用缓存文件，否则将下载、进行处理，并缓存到磁盘
 
@@ -32,19 +31,18 @@ class CoraData(object):
         Args:
         -------
             data_root: string, optional
-                存放数据的目录，原始数据路径: {data_root}/raw
-                缓存数据路径: {data_root}/processed_cora.pkl
+                存放数据的目录，原始数据路径: ../data/cora
+                缓存数据路径: {data_root}/ch7_cached.pkl
             rebuild: boolean, optional
                 是否需要重新构建数据集，当设为True时，如果存在缓存数据也会重建数据
 
         """
         self.data_root = data_root
-        save_file = osp.join(self.data_root, "processed_cora.pkl")
+        save_file = osp.join(self.data_root, "ch7_cached.pkl")
         if osp.exists(save_file) and not rebuild:
             print("Using Cached file: {}".format(save_file))
             self._data = pickle.load(open(save_file, "rb"))
         else:
-            self.maybe_download()
             self._data = self.process_data()
             with open(save_file, "wb") as f:
                 pickle.dump(self.data, f)
@@ -62,7 +60,7 @@ class CoraData(object):
         """
         print("Process data ...")
         _, tx, allx, y, ty, ally, graph, test_index = [self.read_data(
-            osp.join(self.data_root, "raw", name)) for name in self.filenames]
+            osp.join(self.data_root, name)) for name in self.filenames]
         train_index = np.arange(y.shape[0])
         val_index = np.arange(y.shape[0], y.shape[0] + 500)
         sorted_test_index = sorted(test_index)
@@ -91,13 +89,6 @@ class CoraData(object):
         return Data(x=x, y=y, adjacency_dict=adjacency_dict,
                     train_mask=train_mask, val_mask=val_mask, test_mask=test_mask)
 
-    def maybe_download(self):
-        save_path = os.path.join(self.data_root, "raw")
-        for name in self.filenames:
-            if not osp.exists(osp.join(save_path, name)):
-                self.download_data(
-                    "{}/{}".format(self.download_url, name), save_path)
-
     @staticmethod
     def build_adjacency(adj_dict):
         """根据邻接表创建邻接矩阵"""
@@ -125,16 +116,3 @@ class CoraData(object):
             out = pickle.load(open(path, "rb"), encoding="latin1")
             out = out.toarray() if hasattr(out, "toarray") else out
             return out
-
-    @staticmethod
-    def download_data(url, save_path):
-        """数据下载工具，当原始数据不存在时将会进行下载"""
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        data = urllib.request.urlopen(url)
-        filename = os.path.split(url)[-1]
-
-        with open(os.path.join(save_path, filename), 'wb') as f:
-            f.write(data.read())
-
-        return True

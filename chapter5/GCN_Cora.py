@@ -2,9 +2,19 @@
 # coding: utf-8
 
 # <h1>Table of Contents<span class="tocSkip"></span></h1>
-# <div class="toc"><ul class="toc-item"><li><span><a href="#基于Cora数据集的GCN节点分类" data-toc-modified-id="基于Cora数据集的GCN节点分类-1"><span class="toc-item-num">1&nbsp;&nbsp;</span>基于Cora数据集的GCN节点分类</a></span><ul class="toc-item"><li><span><a href="#数据准备" data-toc-modified-id="数据准备-1.1"><span class="toc-item-num">1.1&nbsp;&nbsp;</span>数据准备</a></span></li><li><span><a href="#图卷积层定义" data-toc-modified-id="图卷积层定义-1.2"><span class="toc-item-num">1.2&nbsp;&nbsp;</span>图卷积层定义</a></span></li><li><span><a href="#模型定义" data-toc-modified-id="模型定义-1.3"><span class="toc-item-num">1.3&nbsp;&nbsp;</span>模型定义</a></span></li><li><span><a href="#模型训练" data-toc-modified-id="模型训练-1.4"><span class="toc-item-num">1.4&nbsp;&nbsp;</span>模型训练</a></span></li></ul></li></ul></div>
+# <div class="toc"><ul class="toc-item"><li><span><a href="#基于Cora数据集的GCN节点分类" data-toc-modified-id="基于Cora数据集的GCN节点分类-1"><span class="toc-item-num">1&nbsp;&nbsp;</span>基于Cora数据集的GCN节点分类</a></span><ul class="toc-item"><li><span><a href="#SetUp" data-toc-modified-id="SetUp-1.1"><span class="toc-item-num">1.1&nbsp;&nbsp;</span>SetUp</a></span></li><li><span><a href="#数据准备" data-toc-modified-id="数据准备-1.2"><span class="toc-item-num">1.2&nbsp;&nbsp;</span>数据准备</a></span></li><li><span><a href="#图卷积层定义" data-toc-modified-id="图卷积层定义-1.3"><span class="toc-item-num">1.3&nbsp;&nbsp;</span>图卷积层定义</a></span></li><li><span><a href="#模型定义" data-toc-modified-id="模型定义-1.4"><span class="toc-item-num">1.4&nbsp;&nbsp;</span>模型定义</a></span></li><li><span><a href="#模型训练" data-toc-modified-id="模型训练-1.5"><span class="toc-item-num">1.5&nbsp;&nbsp;</span>模型训练</a></span></li></ul></li></ul></div>
 
 # # 基于Cora数据集的GCN节点分类
+
+# <table align="left">
+#   <td>
+#     <a target="_blank" href="https://colab.research.google.com/github/FighterLYL/GraphNeuralNetwork/blob/master/chapter5/GCN_Cora.ipynb"><img src="https://www.tensorflow.org/images/colab_logo_32px.png" />Run in Google Colab</a>
+#   </td>
+# </table>
+
+# 在Colab中运行时可以通过`代码执行程序->更改运行时类型`选择使用`GPU`
+
+# ## SetUp
 
 # In[1]:
 
@@ -35,12 +45,15 @@ Data = namedtuple('Data', ['x', 'y', 'adjacency',
                            'train_mask', 'val_mask', 'test_mask'])
 
 
+def tensor_from_numpy(x, device):
+    return torch.from_numpy(x).to(device)
+
+
 class CoraData(object):
-    download_url = "https://github.com/kimiyoung/planetoid/raw/master/data"
     filenames = ["ind.cora.{}".format(name) for name in
                  ['x', 'tx', 'allx', 'y', 'ty', 'ally', 'graph', 'test.index']]
 
-    def __init__(self, data_root="cora", rebuild=False):
+    def __init__(self, data_root="../data/cora", rebuild=False):
         """Cora数据，包括数据下载，处理，加载等功能
         当数据的缓存文件存在时，将使用缓存文件，否则将下载、进行处理，并缓存到磁盘
 
@@ -55,19 +68,18 @@ class CoraData(object):
         Args:
         -------
             data_root: string, optional
-                存放数据的目录，原始数据路径: {data_root}/raw
-                缓存数据路径: {data_root}/processed_cora.pkl
+                存放数据的目录，原始数据路径: ../data/cora
+                缓存数据路径: {data_root}/ch5_cached.pkl
             rebuild: boolean, optional
                 是否需要重新构建数据集，当设为True时，如果存在缓存数据也会重建数据
 
         """
         self.data_root = data_root
-        save_file = osp.join(self.data_root, "processed_cora.pkl")
+        save_file = osp.join(self.data_root, "ch5_cached.pkl")
         if osp.exists(save_file) and not rebuild:
             print("Using Cached file: {}".format(save_file))
             self._data = pickle.load(open(save_file, "rb"))
         else:
-            self.maybe_download()
             self._data = self.process_data()
             with open(save_file, "wb") as f:
                 pickle.dump(self.data, f)
@@ -85,7 +97,7 @@ class CoraData(object):
         """
         print("Process data ...")
         _, tx, allx, y, ty, ally, graph, test_index = [self.read_data(
-            osp.join(self.data_root, "raw", name)) for name in self.filenames]
+            osp.join(self.data_root, name)) for name in self.filenames]
         train_index = np.arange(y.shape[0])
         val_index = np.arange(y.shape[0], y.shape[0] + 500)
         sorted_test_index = sorted(test_index)
@@ -114,13 +126,6 @@ class CoraData(object):
         return Data(x=x, y=y, adjacency=adjacency,
                     train_mask=train_mask, val_mask=val_mask, test_mask=test_mask)
 
-    def maybe_download(self):
-        save_path = os.path.join(self.data_root, "raw")
-        for name in self.filenames:
-            if not osp.exists(osp.join(save_path, name)):
-                self.download_data(
-                    "{}/{}".format(self.download_url, name), save_path)
-
     @staticmethod
     def build_adjacency(adj_dict):
         """根据邻接表创建邻接矩阵"""
@@ -148,19 +153,6 @@ class CoraData(object):
             out = pickle.load(open(path, "rb"), encoding="latin1")
             out = out.toarray() if hasattr(out, "toarray") else out
             return out
-
-    @staticmethod
-    def download_data(url, save_path):
-        """数据下载工具，当原始数据不存在时将会进行下载"""
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        data = urllib.request.urlopen(url)
-        filename = os.path.split(url)[-1]
-
-        with open(os.path.join(save_path, filename), 'wb') as f:
-            f.write(data.read())
-
-        return True
 
     @staticmethod
     def normalization(adjacency):
@@ -222,10 +214,12 @@ class GraphConvolution(nn.Module):
         return output
 
     def __repr__(self):
-        return self.__class__.__name__ + ' ('             + str(self.in_features) + ' -> '             + str(self.out_features) + ')'
+        return self.__class__.__name__ + ' ('             + str(self.input_dim) + ' -> '             + str(self.output_dim) + ')'
 
 
 # ## 模型定义
+# 
+# 读者可以自己对GCN模型结构进行修改和实验
 
 # In[4]:
 
@@ -251,19 +245,10 @@ class GcnNet(nn.Module):
 
 
 # 超参数定义
-learning_rate = 0.1
-weight_decay = 5e-4
-epochs = 200
-
-
-# In[6]:
-
-
-# 模型定义：Model, Loss, Optimizer
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model = GcnNet().to(device)
-criterion = nn.CrossEntropyLoss().to(device)
-optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+LEARNING_RATE = 0.1
+WEIGHT_DACAY = 5e-4
+EPOCHS = 200
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 # In[7]:
@@ -271,18 +256,31 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight
 
 # 加载数据，并转换为torch.Tensor
 dataset = CoraData().data
-x = dataset.x / dataset.x.sum(1, keepdims=True)  # 归一化数据，使得每一行和为1
-tensor_x = torch.from_numpy(x).to(device)
-tensor_y = torch.from_numpy(dataset.y).to(device)
-tensor_train_mask = torch.from_numpy(dataset.train_mask).to(device)
-tensor_val_mask = torch.from_numpy(dataset.val_mask).to(device)
-tensor_test_mask = torch.from_numpy(dataset.test_mask).to(device)
+node_feature = dataset.x / dataset.x.sum(1, keepdims=True)  # 归一化数据，使得每一行和为1
+tensor_x = tensor_from_numpy(node_feature, DEVICE)
+tensor_y = tensor_from_numpy(dataset.y, DEVICE)
+tensor_train_mask = tensor_from_numpy(dataset.train_mask, DEVICE)
+tensor_val_mask = tensor_from_numpy(dataset.val_mask, DEVICE)
+tensor_test_mask = tensor_from_numpy(dataset.test_mask, DEVICE)
 normalize_adjacency = CoraData.normalization(dataset.adjacency)   # 规范化邻接矩阵
+
+num_nodes, input_dim = node_feature.shape
 indices = torch.from_numpy(np.asarray([normalize_adjacency.row, 
                                        normalize_adjacency.col]).astype('int64')).long()
 values = torch.from_numpy(normalize_adjacency.data.astype(np.float32))
 tensor_adjacency = torch.sparse.FloatTensor(indices, values, 
-                                            (2708, 2708)).to(device)
+                                            (num_nodes, num_nodes)).to(DEVICE)
+
+
+# In[ ]:
+
+
+# 模型定义：Model, Loss, Optimizer
+model = GcnNet(input_dim).to(DEVICE)
+criterion = nn.CrossEntropyLoss().to(DEVICE)
+optimizer = optim.Adam(model.parameters(), 
+                       lr=LEARNING_RATE, 
+                       weight_decay=WEIGHT_DACAY)
 
 
 # In[8]:
@@ -294,7 +292,7 @@ def train():
     val_acc_history = []
     model.train()
     train_y = tensor_y[tensor_train_mask]
-    for epoch in range(epochs):
+    for epoch in range(EPOCHS):
         logits = model(tensor_adjacency, tensor_x)  # 前向传播
         train_mask_logits = logits[tensor_train_mask]   # 只选择训练节点进行监督
         loss = criterion(train_mask_logits, train_y)    # 计算损失值
@@ -365,5 +363,14 @@ plot_loss_with_acc(loss, val_acc)
 # In[ ]:
 
 
-
+# 绘制测试数据的TSNE降维图
+from sklearn.manifold import TSNE
+tsne = TSNE()
+out = tsne.fit_transform(test_logits)
+fig = plt.figure()
+for i in range(7):
+    indices = test_label == i
+    x, y = out[indices].T
+    plt.scatter(x, y, label=str(i))
+plt.legend()
 
